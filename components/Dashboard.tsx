@@ -11,7 +11,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ farmData, user }) => {
-    const { tasks, plots, journalEntries, accounts } = farmData;
+    const { tasks, plots, journalEntries, accounts, inventory } = farmData;
 
     const taskSummary = useMemo(() => {
         return tasks.reduce((acc, task) => {
@@ -68,6 +68,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ farmData, user }) => {
         return Object.values(plotData);
     }, [plots, journalEntries, accounts]);
 
+    const lowStockItems = useMemo(() => {
+        if (!inventory) return [];
+        return inventory.filter(item => {
+            const reorderPoint = item.reorderPoint || 0;
+            return item.quantity <= reorderPoint;
+        });
+    }, [inventory]);
 
     return (
         <div className="space-y-6">
@@ -101,12 +108,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ farmData, user }) => {
                         </div>
                     </div>
                 </Card>
-                 <Card title="Quick Links" className="col-span-1">
-                    <ul className="space-y-2">
-                        <li><a href="#" className="text-green-600 hover:underline">Add New Task</a></li>
-                        <li><a href="#" className="text-green-600 hover:underline">Log Expense</a></li>
-                        <li><a href="#" className="text-green-600 hover:underline">View Inventory</a></li>
-                    </ul>
+                 <Card title="Inventory Alerts" className="col-span-1">
+                    {lowStockItems.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">All inventory levels are healthy</p>
+                    ) : (
+                        <div className="space-y-2">
+                            <p className="text-sm text-red-600 font-semibold mb-2">
+                                {lowStockItems.length} item{lowStockItems.length > 1 ? 's' : ''} low on stock
+                            </p>
+                            <ul className="space-y-1 max-h-32 overflow-y-auto">
+                                {lowStockItems.map(item => (
+                                    <li key={item.id} className="text-sm text-gray-700 flex justify-between">
+                                        <span className="truncate">{item.name}</span>
+                                        <span className="text-red-600 font-medium ml-2">{item.quantity} {item.unit}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </Card>
                 <Card title={`Profitability by Plot (${DEFAULT_CURRENCY})`} className="col-span-1 md:col-span-2 lg:col-span-4">
                      <ResponsiveContainer width="100%" height={300}>
