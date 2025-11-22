@@ -9,6 +9,7 @@ interface AuthPageProps {
     onJoinWorkspace: (name: string, email: string, password: string, workspaceId: string) => Promise<boolean>;
     onLogin: (email: string, password: string) => Promise<boolean>;
     onGoogleLogin: (workspaceId?: string) => Promise<void>;
+    onSuperAdminLogin?: (password: string) => boolean;
 }
 
 const GoogleIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -20,8 +21,8 @@ const GoogleIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     </svg>
 );
 
-export const AuthPage: React.FC<AuthPageProps> = ({ onCreateAccount, onJoinWorkspace, onLogin, onGoogleLogin }) => {
-    const [activeTab, setActiveTab] = useState<'login' | 'create' | 'join'>('login');
+export const AuthPage: React.FC<AuthPageProps> = ({ onCreateAccount, onJoinWorkspace, onLogin, onGoogleLogin, onSuperAdminLogin }) => {
+    const [activeTab, setActiveTab] = useState<'login' | 'create' | 'join' | 'superadmin'>('login');
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -31,8 +32,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onCreateAccount, onJoinWorks
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        
-        if (activeTab === 'login') {
+
+        if (activeTab === 'superadmin') {
+            if (!password) {
+                setError('Password is required.');
+                return;
+            }
+            if (onSuperAdminLogin) {
+                const success = onSuperAdminLogin(password);
+                if (!success) {
+                    setError('Invalid Super Admin password.');
+                }
+            }
+        } else if (activeTab === 'login') {
              if (!email || !password) {
                 setError('Email and password are required.');
                 return;
@@ -57,12 +69,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onCreateAccount, onJoinWorks
         alert('In a real application, a password reset link would be sent to your email.');
     };
 
-    const TabButton: React.FC<{tab: 'login' | 'create' | 'join', children: React.ReactNode}> = ({ tab, children }) => (
+    const TabButton: React.FC<{tab: 'login' | 'create' | 'join' | 'superadmin', children: React.ReactNode}> = ({ tab, children }) => (
         <button
             onClick={() => setActiveTab(tab)}
             className={`w-full py-2.5 text-sm font-medium leading-5 rounded-lg
                 focus:outline-none focus:ring-2 ring-offset-2 ring-offset-green-50 ring-white ring-opacity-60
-                ${activeTab === tab ? 'bg-green-600 text-white shadow' : 'text-gray-700 hover:bg-gray-200'}`}
+                ${activeTab === tab ? (tab === 'superadmin' ? 'bg-purple-600 text-white shadow' : 'bg-green-600 text-white shadow') : 'text-gray-700 hover:bg-gray-200'}`}
         >
             {children}
         </button>
@@ -77,10 +89,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onCreateAccount, onJoinWorks
                  <p className="text-gray-600 mt-2">The all-in-one platform for modern farm management.</p>
             </div>
             <div className="w-full max-w-md">
-                <div className="flex space-x-1 rounded-xl bg-gray-100 p-1 mb-4">
+                <div className="grid grid-cols-4 gap-1 rounded-xl bg-gray-100 p-1 mb-4">
                     <TabButton tab="login">Login</TabButton>
-                    <TabButton tab="create">Create Account</TabButton>
-                    <TabButton tab="join">Join Workspace</TabButton>
+                    <TabButton tab="create">Create</TabButton>
+                    <TabButton tab="join">Join</TabButton>
+                    <TabButton tab="superadmin">🔐 Admin</TabButton>
                 </div>
                 <Card>
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -88,7 +101,29 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onCreateAccount, onJoinWorks
                             {activeTab === 'login' && 'Login to Your Account'}
                             {activeTab === 'create' && 'Create a New Account'}
                             {activeTab === 'join' && 'Join an Existing Workspace'}
+                            {activeTab === 'superadmin' && '🔐 Super Admin Access'}
                         </h2>
+
+                        {activeTab === 'superadmin' && (
+                            <div className="space-y-4">
+                                <Input
+                                    id="superadmin-password"
+                                    label="Super Admin Password"
+                                    type="password"
+                                    value={password}
+                                    onChange={e => {
+                                        setPassword(e.target.value);
+                                        setError('');
+                                    }}
+                                    required
+                                    placeholder="Enter super admin password"
+                                />
+                                {error && <p className="text-red-600 text-sm">{error}</p>}
+                                <Button type="submit" className="w-full !bg-purple-600 hover:!bg-purple-700">
+                                    Access Super Admin Panel
+                                </Button>
+                            </div>
+                        )}
 
                         {activeTab === 'join' && (
                              <Input id="workspaceId" label="Workspace ID" type="text" value={workspaceId} onChange={e => {
@@ -97,52 +132,55 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onCreateAccount, onJoinWorks
                              }} required placeholder="Enter the ID from your invitation" />
                         )}
 
-                        <Button type="button" variant="secondary" className="w-full !bg-white !text-gray-700 border border-gray-300 hover:!bg-gray-50 flex items-center justify-center" onClick={() => {
-                            if (activeTab === 'join' && !workspaceId.trim()) {
-                                setError('Please enter Workspace ID first');
-                                return;
-                            }
-                            setError('');
-                            onGoogleLogin(activeTab === 'join' ? workspaceId : undefined);
-                        }}>
-                            <GoogleIcon className="w-5 h-5 mr-3" />
-                            Sign in with Google
-                        </Button>
+                        {activeTab !== 'superadmin' && (
+                            <>
+                                <Button type="button" variant="secondary" className="w-full !bg-white !text-gray-700 border border-gray-300 hover:!bg-gray-50 flex items-center justify-center" onClick={() => {
+                                    if (activeTab === 'join' && !workspaceId.trim()) {
+                                        setError('Please enter Workspace ID first');
+                                        return;
+                                    }
+                                    setError('');
+                                    onGoogleLogin(activeTab === 'join' ? workspaceId : undefined);
+                                }}>
+                                    <GoogleIcon className="w-5 h-5 mr-3" />
+                                    Sign in with Google
+                                </Button>
 
-                         <div className="relative my-2">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-gray-300" />
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="px-2 bg-white text-gray-500">
-                                    Or continue with
-                                </span>
-                            </div>
-                        </div>
-                        
-                        {activeTab !== 'login' && (
-                             <Input id="name" label="Full Name" type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="John Appleseed" />
-                        )}
-                        <Input id="email" label="Email Address" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com" />
-                        <div>
-                            <Input id="password" label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" />
-                            {activeTab === 'login' && (
-                                <div className="text-right mt-1">
-                                    <button type="button" onClick={handleForgotPassword} className="text-sm font-medium text-green-600 hover:text-green-500">
-                                        Forgot Password?
-                                    </button>
+                                <div className="relative my-2">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-gray-300" />
+                                    </div>
+                                    <div className="relative flex justify-center text-sm">
+                                        <span className="px-2 bg-white text-gray-500">
+                                            Or continue with
+                                        </span>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-                        
-                        {error && <p className="text-sm text-red-600">{error}</p>}
 
-                        <Button type="submit" className="w-full">
-                           {activeTab === 'login' && 'Login'}
-                           {activeTab === 'create' && 'Create Account'}
-                           {/* FIX: Corrected typo from active_tab to activeTab */}
-                           {activeTab === 'join' && 'Join & Create Account'}
-                        </Button>
+                                {activeTab !== 'login' && (
+                                    <Input id="name" label="Full Name" type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="John Appleseed" />
+                                )}
+                                <Input id="email" label="Email Address" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com" />
+                                <div>
+                                    <Input id="password" label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" />
+                                    {activeTab === 'login' && (
+                                        <div className="text-right mt-1">
+                                            <button type="button" onClick={handleForgotPassword} className="text-sm font-medium text-green-600 hover:text-green-500">
+                                                Forgot Password?
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {error && <p className="text-sm text-red-600">{error}</p>}
+
+                                <Button type="submit" className="w-full">
+                                {activeTab === 'login' && 'Login'}
+                                {activeTab === 'create' && 'Create Account'}
+                                {activeTab === 'join' && 'Join & Create Account'}
+                                </Button>
+                            </>
+                        )}
                     </form>
                 </Card>
             </div>

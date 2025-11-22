@@ -37,6 +37,11 @@ export interface Comment {
     createdAt: string;
 }
 
+export interface InventoryConsumption {
+    inventoryId: string;
+    quantityUsed: number;
+}
+
 export interface Task {
     id:string;
     title: string;
@@ -51,6 +56,7 @@ export interface Task {
     createdAt: string;
     comments: Comment[];
     reminderDate?: string;
+    inventoryConsumed?: InventoryConsumption[];
 }
 
 export interface Account {
@@ -102,6 +108,7 @@ export interface InventoryItem {
     supplier: string;
     purchaseDate: string;
     costPerUnit: number;
+    reorderPoint?: number;
 }
 
 // AEO (Agricultural Extension Officer) specific types
@@ -140,6 +147,7 @@ export interface User {
     id: string;
     name: string;
     email: string;
+    status?: 'active' | 'suspended';
 }
 
 export const ALL_ROLES = [
@@ -169,6 +177,24 @@ export interface Workspace {
     name: string;
     members: { [userId: string]: { role: Role } };
     featurePermissions: { [key in Feature]: FeaturePermission };
+    status?: 'active' | 'suspended';
+    ownerId?: string;
+}
+
+// Super Admin types
+export interface PlatformConfig {
+    featureFlags: { [key: string]: boolean };
+    defaultPermissions: { [key in Feature]: FeaturePermission };
+}
+
+export interface AuditLogEntry {
+    id: string;
+    timestamp: string;
+    action: string;
+    performedBy: string;
+    targetType: 'user' | 'workspace';
+    targetId: string;
+    details: string;
 }
 
 // Farm Data Context

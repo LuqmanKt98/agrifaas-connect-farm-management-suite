@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { AuthPage } from './components/auth/AuthPage';
 import { CreateWorkspacePage } from './components/auth/CreateWorkspacePage';
 import { MainApp } from './components/MainApp';
+import { SuperAdminPanel } from './components/super-admin/SuperAdminPanel';
+import { ImpersonationBanner } from './components/shared/ImpersonationBanner';
 import type { User, Workspace, Role, Feature, FeaturePermission } from './types';
 import { ALL_ROLES } from './types';
 import { seedFirestoreData } from './services/seedFirestoreData';
@@ -10,6 +12,8 @@ import { useAuth } from './hooks/useAuth';
 import { useFirestoreUsers } from './hooks/useFirestoreUsers';
 import { signUp, signIn, signInWithGoogle, logout } from './services/authService';
 import { setDocument, getDocument, queryCollection } from './services/firestoreService';
+
+const SUPER_ADMIN_PASSWORD = 'superadmin';
 
 // Mock user and workspace data for demonstration purposes
 const getMockUser = (email: string, name: string): User => ({ id: `user_${email}`, email, name });
@@ -39,37 +43,72 @@ const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [workspace, setWorkspace] = useState<Workspace | null>(null);
     const [allWorkspaces, setAllWorkspaces] = useState<Workspace[]>([]);
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [impersonatedUser, setImpersonatedUser] = useState<User | null>(null);
+    const [impersonatedWorkspace, setImpersonatedWorkspace] = useState<Workspace | null>(null);
 
     useEffect(() => {
+        // Skip this effect if we're in impersonation mode
+        if (impersonatedUser) {
+            return;
+        }
+
         if (!firebaseUser) {
             setUser(null);
             setWorkspace(null);
             setAllWorkspaces([]);
             return;
         }
-        
+
         const loadUserData = async () => {
             const userDoc = await getDocument('users', firebaseUser.uid);
             if (userDoc.exists()) {
                 const userData = { id: firebaseUser.uid, ...userDoc.data() } as User;
                 setUser(userData);
-                
+
                 const workspacesSnap = await queryCollection('workspaces', `members.${firebaseUser.uid}`, '!=', null);
                 const workspaces = workspacesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Workspace));
                 setAllWorkspaces(workspaces);
-                
+
                 if (workspaces.length > 0) {
                     setWorkspace(workspaces[0]);
                 }
             }
         };
         loadUserData();
-    }, [firebaseUser]);
+    }, [firebaseUser, impersonatedUser]);
 
     const handleLogout = async () => {
         await logout();
         setUser(null);
         setWorkspace(null);
+        setIsSuperAdmin(false);
+        setImpersonatedUser(null);
+        setImpersonatedWorkspace(null);
+    };
+
+    const handleSuperAdminLogin = (password: string): boolean => {
+        if (password === SUPER_ADMIN_PASSWORD) {
+            setIsSuperAdmin(true);
+            return true;
+        }
+        return false;
+    };
+
+    const handleImpersonateUser = (impUser: User, impWorkspace: Workspace) => {
+        setImpersonatedUser(impUser);
+        setImpersonatedWorkspace(impWorkspace);
+        setUser(impUser);
+        setWorkspace(impWorkspace);
+        setIsSuperAdmin(false);
+    };
+
+    const handleExitImpersonation = () => {
+        setImpersonatedUser(null);
+        setImpersonatedWorkspace(null);
+        setUser(null);
+        setWorkspace(null);
+        setIsSuperAdmin(true);
     };
 
     const handleCreateAccount = async (name: string, email: string, password: string) => {
@@ -198,25 +237,76 @@ const App: React.FC = () => {
 
 
     if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-    
-    if (!user) {
-        return <AuthPage onCreateAccount={handleCreateAccount} onJoinWorkspace={handleJoinWorkspace} onLogin={handleLogin} onGoogleLogin={handleGoogleLogin} />;
+
+    // Super Admin Panel
+    if (isSuperAdmin) {
+        return <SuperAdminPanel onLogout={handleLogout} onImpersonateUser={handleImpersonateUser} />;
     }
+
+    // Auth Page
+    if (!user) {
+        return <AuthPage
+            onCreateAccount={handleCreateAccount}
+            onJoinWorkspace={handleJoinWorkspace}
+            onLogin={handleLogin}
+            onGoogleLogin={handleGoogleLogin}
+            onSuperAdminLogin={handleSuperAdminLogin}
+        />;
+    }
+
+    // Check if user is suspended
+    if (user.status === 'suspended') {
+        return (
+            <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
+                <h1 className="text-3xl font-bold text-red-600">Account Suspended</h1>
+                <p className="text-gray-700 mt-2">Your account has been suspended by the platform administrator.</p>
+                <p className="text-gray-600 mt-1 text-sm">Please contact support for more information.</p>
+                <button onClick={handleLogout} className="mt-4 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                    Logout
+                </button>
+            </div>
+        );
+    }
+
+    // Create Workspace Page
     if (!workspace) {
         return <CreateWorkspacePage user={user} onCreateWorkspace={handleCreateWorkspace} />;
     }
 
+    // Check if workspace is suspended
+    if (workspace.status === 'suspended') {
+        return (
+            <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
+                <h1 className="text-3xl font-bold text-red-600">Workspace Suspended</h1>
+                <p className="text-gray-700 mt-2">This workspace has been suspended by the platform administrator.</p>
+                <p className="text-gray-600 mt-1 text-sm">Please contact support for more information.</p>
+                <button onClick={handleLogout} className="mt-4 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                    Logout
+                </button>
+            </div>
+        );
+    }
+
+    // Main App
     return (
-        <MainApp 
-            user={user} 
-            initialWorkspace={workspace} 
-            onLogout={handleLogout} 
-            allUsers={allUsers}
-            onRemoveUser={handleRemoveUserFromWorkspace}
-            onUpdateUserRole={handleUpdateUserRole}
-            onDeleteWorkspace={handleDeleteWorkspace}
-            onUpdateFeaturePermissions={handleUpdateFeaturePermissions}
-        />
+        <>
+            {impersonatedUser && (
+                <ImpersonationBanner
+                    userName={impersonatedUser.name}
+                    onExit={handleExitImpersonation}
+                />
+            )}
+            <MainApp
+                user={user}
+                initialWorkspace={workspace}
+                onLogout={handleLogout}
+                allUsers={allUsers}
+                onRemoveUser={handleRemoveUserFromWorkspace}
+                onUpdateUserRole={handleUpdateUserRole}
+                onDeleteWorkspace={handleDeleteWorkspace}
+                onUpdateFeaturePermissions={handleUpdateFeaturePermissions}
+            />
+        </>
     );
 };
 
