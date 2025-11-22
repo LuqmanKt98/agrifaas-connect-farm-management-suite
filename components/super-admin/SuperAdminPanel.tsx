@@ -128,11 +128,11 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ onLogout, onIm
 
     return (
         <div className="min-h-screen bg-gray-100">
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
+            <div className="bg-white border-b shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex justify-between items-center">
-                        <h1 className="text-3xl font-bold">🔐 Super Admin Panel</h1>
-                        <Button variant="secondary" onClick={onLogout} className="!bg-white !text-purple-600 hover:!bg-gray-100">
+                        <h1 className="text-2xl font-bold text-gray-800">🔐 Super Admin Panel</h1>
+                        <Button variant="secondary" onClick={onLogout}>
                             Logout
                         </Button>
                     </div>
@@ -142,11 +142,11 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ onLogout, onIm
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 <div className="mb-6 flex gap-2 overflow-x-auto">
                     {[
-                        { id: 'dashboard', label: '📊 Dashboard', icon: '📊' },
-                        { id: 'workspaces', label: '🏢 Workspaces', icon: '🏢' },
-                        { id: 'users', label: '👥 Users', icon: '👥' },
-                        { id: 'audit', label: '📋 Audit Log', icon: '📋' },
-                        { id: 'config', label: '⚙️ Configuration', icon: '⚙️' }
+                        { id: 'dashboard', label: '📊 Dashboard' },
+                        { id: 'workspaces', label: '🏢 Workspaces' },
+                        { id: 'users', label: '👥 Users' },
+                        { id: 'audit', label: '📋 Audit Log' },
+                        { id: 'config', label: '⚙️ Configuration' }
                     ].map(({ id, label }) => (
                         <Button
                             key={id}

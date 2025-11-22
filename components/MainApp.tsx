@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { User, Workspace, Feature, Role, FeaturePermission, Task } from '../types';
-import { ALL_FEATURES, TaskStatus } from '../types';
+import { ALL_FEATURES } from '../types';
 import { useFarmDataFirestore } from '../hooks/useFarmDataFirestore';
 import { Sidebar } from './Sidebar';
 import { Dashboard } from './Dashboard';
@@ -15,24 +15,13 @@ import { Admin } from './Admin';
 import { ProfileModal } from './ProfileModal';
 import { Avatar } from './shared/Avatar';
 import { TaskDetailModal } from './TaskDetailModal';
+import { ImpersonationBanner } from './shared/ImpersonationBanner';
 
-const formatTimeAgo = (date: Date): string => {
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + " years ago";
-    interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + " months ago";
-    interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + " days ago";
-    interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + " hours ago";
-    interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + " minutes ago";
-    return "just now";
-};
-
+const MenuIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+);
 
 interface MainAppProps {
     user: User;
@@ -43,18 +32,30 @@ interface MainAppProps {
     onUpdateUserRole: (userId: string, newRole: Role) => Promise<void>;
     onDeleteWorkspace: () => Promise<void>;
     onUpdateFeaturePermissions: (feature: Feature, permission: FeaturePermission) => Promise<void>;
+    impersonatingUser?: User | null;
+    onExitImpersonation?: () => void;
 }
 
-export const MainApp: React.FC<MainAppProps> = ({ user, initialWorkspace, onLogout, allUsers, onRemoveUser, onUpdateUserRole, onDeleteWorkspace, onUpdateFeaturePermissions }) => {
+export const MainApp: React.FC<MainAppProps> = ({
+    user,
+    initialWorkspace,
+    onLogout,
+    allUsers,
+    onRemoveUser,
+    onUpdateUserRole,
+    onDeleteWorkspace,
+    onUpdateFeaturePermissions,
+    impersonatingUser,
+    onExitImpersonation
+}) => {
     const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
     const [currentView, setCurrentView] = useState<Feature>('Dashboard');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-    const [isReminderPopoverOpen, setIsReminderPopoverOpen] = useState(false);
-    const reminderRef = useRef<HTMLDivElement>(null);
-    
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
     const farmData = useFarmDataFirestore(workspace.id);
-    
+
     useEffect(() => {
         setWorkspace(initialWorkspace);
     }, [initialWorkspace]);
@@ -72,38 +73,12 @@ export const MainApp: React.FC<MainAppProps> = ({ user, initialWorkspace, onLogo
             return permission && permission.enabled && permission.allowedRoles.includes(currentUserRole);
         });
     }, [workspace.featurePermissions, currentUserRole]);
-    
-    const activeReminders = useMemo(() => {
-        const now = new Date();
-        return farmData.tasks
-            .filter(task => 
-                task.reminderDate && 
-                task.status !== TaskStatus.Done && 
-                new Date(task.reminderDate) <= now
-            )
-            .sort((a, b) => new Date(b.reminderDate!).getTime() - new Date(a.reminderDate!).getTime());
-    }, [farmData.tasks]);
-    
+
     useEffect(() => {
         if (!enabledFeatures.includes(currentView)) {
             setCurrentView('Dashboard');
         }
     }, [enabledFeatures, currentView]);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (reminderRef.current && !reminderRef.current.contains(event.target as Node)) {
-                setIsReminderPopoverOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [reminderRef]);
-    
-    const handleReminderClick = (task: Task) => {
-        setSelectedTask(task);
-        setIsReminderPopoverOpen(false);
-    };
 
     const renderContent = () => {
         switch (currentView) {
@@ -140,58 +115,65 @@ export const MainApp: React.FC<MainAppProps> = ({ user, initialWorkspace, onLogo
     
     return (
         <>
-            <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={user} onLogout={onLogout} />
             {selectedTask && (
-                <TaskDetailModal 
+                <TaskDetailModal
                     task={selectedTask}
                     onClose={() => setSelectedTask(null)}
                     onUpdateTask={farmData.updateTask}
                     onAddTaskComment={farmData.addTaskComment}
                     allUsers={workspaceUsers}
                     allPlots={farmData.plots}
+                    inventory={farmData.inventory}
                     currentUser={user}
                 />
             )}
+            <ProfileModal
+                isOpen={isProfileModalOpen}
+                onClose={() => setIsProfileModalOpen(false)}
+                user={user}
+                onLogout={onLogout}
+            />
+
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+                    onClick={() => setIsSidebarOpen(false)}
+                    aria-hidden="true"
+                />
+            )}
+
             <div className="flex h-screen bg-gray-100 font-sans">
-                <Sidebar 
+                <Sidebar
                     currentView={currentView}
-                    onSetView={setCurrentView}
+                    onSetView={(view) => {
+                        setCurrentView(view);
+                        setIsSidebarOpen(false);
+                    }}
                     features={enabledFeatures}
                     workspaceName={workspace.name}
+                    isOpen={isSidebarOpen}
+                    onClose={() => setIsSidebarOpen(false)}
                 />
                 <main className="flex-1 flex flex-col overflow-hidden">
+                    {impersonatingUser && onExitImpersonation && (
+                        <ImpersonationBanner userName={impersonatingUser.name} onExit={onExitImpersonation} />
+                    )}
                     <header className="flex justify-between items-center p-4 bg-white border-b">
-                        <h1 className="text-2xl font-semibold text-gray-800">{currentView}</h1>
-                        <div className="flex items-center space-x-4">
-                             <div className="relative" ref={reminderRef}>
-                                <button onClick={() => setIsReminderPopoverOpen(prev => !prev)} className="text-gray-500 hover:text-gray-700 relative">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                                    {activeReminders.length > 0 && (
-                                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">{activeReminders.length}</span>
-                                    )}
-                                </button>
-                                {isReminderPopoverOpen && (
-                                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg z-20 border">
-                                        <div className="p-3 font-semibold border-b">Reminders</div>
-                                        <ul className="py-1 max-h-80 overflow-y-auto">
-                                            {activeReminders.length > 0 ? activeReminders.map(task => (
-                                                <li key={task.id}>
-                                                    <button onClick={() => handleReminderClick(task)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                                        <p className="font-medium">{task.title}</p>
-                                                        <p className="text-xs text-gray-500">{formatTimeAgo(new Date(task.reminderDate!))}</p>
-                                                    </button>
-                                                </li>
-                                            )) : (
-                                                <li className="px-4 py-3 text-sm text-gray-500 text-center">No active reminders.</li>
-                                            )}
-                                        </ul>
-                                    </div>
-                                )}
-                            </div>
-                             <div className="cursor-pointer" onClick={() => setIsProfileModalOpen(true)}>
-                                <Avatar name={user.name} />
-                            </div>
-                        </div>
+                         <div className="flex items-center space-x-4">
+                            <button onClick={() => setIsSidebarOpen(true)} className="text-gray-600 md:hidden" aria-label="Open sidebar">
+                                <MenuIcon className="h-6 w-6" />
+                            </button>
+                             <h1 className="text-2xl font-semibold text-gray-800">{currentView}</h1>
+                         </div>
+                         <div className="flex items-center space-x-4">
+                             <button onClick={() => setIsProfileModalOpen(true)} className="flex items-center space-x-2">
+                                 <span className="hidden sm:inline text-right">
+                                     <span className="font-semibold text-gray-700">{user.name}</span>
+                                     <span className="block text-xs text-gray-500 capitalize">{currentUserRole}</span>
+                                 </span>
+                                 <Avatar name={user.name} />
+                             </button>
+                         </div>
                     </header>
                     <div className="flex-1 p-6 overflow-y-auto">
                         {renderContent()}

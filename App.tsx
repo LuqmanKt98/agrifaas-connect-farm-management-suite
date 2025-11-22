@@ -289,24 +289,18 @@ const App: React.FC = () => {
 
     // Main App
     return (
-        <>
-            {impersonatedUser && (
-                <ImpersonationBanner
-                    userName={impersonatedUser.name}
-                    onExit={handleExitImpersonation}
-                />
-            )}
-            <MainApp
-                user={user}
-                initialWorkspace={workspace}
-                onLogout={handleLogout}
-                allUsers={allUsers}
-                onRemoveUser={handleRemoveUserFromWorkspace}
-                onUpdateUserRole={handleUpdateUserRole}
-                onDeleteWorkspace={handleDeleteWorkspace}
-                onUpdateFeaturePermissions={handleUpdateFeaturePermissions}
-            />
-        </>
+        <MainApp
+            user={user}
+            initialWorkspace={workspace}
+            onLogout={handleLogout}
+            allUsers={allUsers}
+            onRemoveUser={handleRemoveUserFromWorkspace}
+            onUpdateUserRole={handleUpdateUserRole}
+            onDeleteWorkspace={handleDeleteWorkspace}
+            onUpdateFeaturePermissions={handleUpdateFeaturePermissions}
+            impersonatingUser={impersonatedUser}
+            onExitImpersonation={handleExitImpersonation}
+        />
     );
 };
 
